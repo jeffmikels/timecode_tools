@@ -1,0 +1,1 @@
+Scripts for generating LTC wave files ahead of time and MTC MIDI events in realtime.
