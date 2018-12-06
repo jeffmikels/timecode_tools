@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import click, mido
+import click, mido, time
 
 from timecode import Timecode
 
@@ -13,7 +13,7 @@ def listen(port_name):
 	print('Listening to MIDI messages on > {} <'.format(port_name))
 	while 1:
 		msg = port.receive(block=True)
-		print(msg)
+		print(f'{time.time()}: {msg}')
 
 @click.command()
 @click.option('--port', '-p', help='name of MIDI port to connect to')
