@@ -35,7 +35,7 @@ def listen(port_name):
 def main(port):
 	if (port is None):
 		print ('Available MIDI ports')
-		print (mido.get_output_names())
+		print (mido.get_input_names())
 	else:
 		listen(port)
 		
