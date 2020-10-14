@@ -142,7 +142,7 @@ def mtc_decode(mtc_bytes):
 	rateflag = rhh >> 5
 	hrs      = rhh & 31
 	fps = ['24','25','29.97','30'][rateflag]
-	total_frames = frs + float(fps) * (secs + mins * 60 + hrs * 60 * 60)
+	total_frames = int(frs + float(fps) * (secs + mins * 60 + hrs * 60 * 60))
 	return Timecode(fps, frames=total_frames)
 
 def mtc_full_frame(timecode):
