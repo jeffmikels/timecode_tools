@@ -33,6 +33,7 @@ def send_quarter_frames(outport, timecode, part=0):
 	send_quarter_frames(outport, timecode, part+1)
 
 def start_mtc(outport, fps, start_string, duration, click_data=None):
+	print(f'STARTING MTC: {fps}fps {start_string} {duration}s')
 	tc = Timecode(fps, start_string)
 	frametime = 1/float(fps)
 	start = time.time()
@@ -41,6 +42,7 @@ def start_mtc(outport, fps, start_string, duration, click_data=None):
 	next_full_frame_time = start
 	next_click_time = start
 	do_click = False
+	runuptimes = []
 	if click_data is not None:
 		in_runup = True
 		do_click = True
@@ -76,7 +78,8 @@ def start_mtc(outport, fps, start_string, duration, click_data=None):
 			runuptimes=runuptimes[1:]
 		else:
 			time.sleep(runuptimes[0]-now)
-		
+	
+	print('beginning')
 	while 1:
 		now = time.time()
 		if do_click and now >= next_click_time:
@@ -89,6 +92,7 @@ def start_mtc(outport, fps, start_string, duration, click_data=None):
 		
 		# send mtc
 		if now > end:
+			print('ENDING')
 			break
 		elif now >= next_full_frame_time:
 			tc.next()
@@ -133,7 +137,7 @@ def main(fps, start, duration, metronome, bpm, division, base_note, accent_note,
 		else:
 			start_mtc(outport, fps, start, float(duration))
 	except:
-		pass
+		print('error somewhere')
 	
 
 main()

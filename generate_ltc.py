@@ -51,6 +51,8 @@ def make_ltc_wave(fps, start, duration, rate, bits):
 	# generate the timecode data for the entire duration
 	tc = Timecode(fps, start)
 	tc_encoded = []
+	print('PREPARING TIMECODE:')
+	print(f'| {start}\n| {fps} fps\n| {duration} secs')
 	print('Generating Timecode Stream')
 	for i in range(int(duration * fps) + 1):
 		# this is the first frame
@@ -111,12 +113,16 @@ def make_ltc_wave(fps, start, duration, rate, bits):
 	
 		data[sample] = this_val * max_val
 	
+	
+	# everything has been computed
+	# prepare to write the wave file
 	print()
-	print('Writing WAV File')
-	wave_file_name = 'ltc-{}fps-{}secs.wav'.format(fps, duration)
+	wave_file_name = 'ltc--{}--{}fps--{}secs.wav'.format(start.replace(':','_'), fps, duration)
+	print(f'Writing WAV File: {wave_file_name}')
 	f = open(wave_file_name, 'wb')
 	write_wave_file(f, data, rate=rate, bits=bits)
 	f.close()
+	print('DONE\n\n')
 
 
 # def run(fps, realtime=True, duration=None, renderer=print):

@@ -3,12 +3,31 @@
 import click
 import sounddevice as sd
 import soundfile as sf
+import numpy
 import time
 import threading
 import tkinter as tk
 import random
 
 # import numpy
+
+def prepare_audio(orig_data, channel, channels):
+	# put the audio in the correct channel
+	# assuming the input signal has the click on channel 1
+
+	audio_data = []
+	for sample in orig_data:
+		click_sample = sample[0]
+		this_sample = []
+		for i in range(channels):
+			if i == channel - 1:
+				this_sample.append(click_sample)
+			else:
+				this_sample.append(0)
+		audio_data.append(this_sample)
+		print(this_sample)
+	return numpy.array(audio_data, dtype="int16")
+	
 
 class Metronome:
 	def __init__(self, click_file, bpm, audio_device, audio_channel):
@@ -28,19 +47,8 @@ class Metronome:
 		self.volume = 50
 		
 	def setup_audio(self):
-		orig_data, fs = sf.read(self.click_file)
-		# put the audio in the correct channel
-		self.audio_data = []
-		for sample in orig_data:
-			this_sample = []
-			for i in range(self.audio_channel-1):
-				this_sample.append(0)
-			this_sample.append(sample)
-		
-			# always make sure there are at least two channels
-			if len(this_sample) == 1:
-				this_sample.append(0)
-			self.audio_data.append(this_sample)
+		orig_data, fs = sf.read(self.click_file, dtype='int16', always_2d=True)
+		self.audio_data = prepare_audio(orig_data, self.audio_channel, self.audio_device['channels'])
 		
 		sd.default.device = self.audio_device['id']
 		sd.default.samplerate = fs
@@ -87,10 +95,11 @@ class Metronome:
 	def do_thread(self):
 		while self.running:
 			now = time.time()
-				
+			
 			if now >= self.next_click:
 				if not self.muted:
 					self.play_click()
+					print(now - self.next_click)
 					# threading.Thread(target=self.play_click).start()
 					
 				# my measurements show that this method of incrementing
@@ -111,7 +120,7 @@ class Metronome:
 					callback(self)
 
 			# don't burn all the cpu...
-			time.sleep(.016666)
+			time.sleep(.0016666)
 		
 
 class MetronomeApp(tk.Frame):
@@ -372,6 +381,7 @@ def main(bpm, duration, click_file, audio_device, audio_channel, gui):
 				metronome.stop()
 		except KeyboardInterrupt:
 			metronome.stop()
+			self.metronome_thread.join()
 	
 	else:
 		
