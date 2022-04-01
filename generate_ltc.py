@@ -4,12 +4,13 @@ from tools import cint, ltc_encode
 from timecode import Timecode
 import time, os, click
 
-def write_wave_file(f, data, rate=44100, bits=8):
+def write_wave_file(file_name, data, rate=48000, bits=8):
 	header = gen_wave_header(data, rate=rate, bits=bits)
-	f.write(header)
-	f.write(data)
+	with open(file_name, 'wb') as f:
+		f.write(header)
+		f.write(data)
 
-def gen_wave_header(data, rate=44100, bits=8, channels=1):
+def gen_wave_header(data, rate=48000, bits=8, channels=1):
 	# integers are stored in C format
 	# where 0x0000 + 1 = 0x0100 AND 0xFF00 + 1 = 0x0001
 	# the following header has a specified length
@@ -35,23 +36,45 @@ def gen_wave_header(data, rate=44100, bits=8, channels=1):
 @click.command()
 @click.option('--fps', '-f',   default='24', help='frames per second, defaults to 24')
 @click.option('--start', '-s', default='00:01:00:00',  help='start timecode, defaults to 00:01:00:00')
-@click.option('--duration', '-d',   default='60', help='duration in seconds for the ltc, defaults to 60')
-@click.option('--rate', '-r',   default=44100, help='sample rate, defaults to 44100')
-@click.option('--bits', '-b',   default=8, help='bits per sample, defaults to 8')
+@click.option('--duration', '-d',   default=300.0, help='duration in seconds for the ltc, defaults to 300 (5 minutes)')
+@click.option('--rate', '-r',   default=48000, help='sample rate, defaults to 48000')
+@click.option('--bits', '-b',   default=16, help='bits per sample, defaults to 16')
 def make_ltc_wave(fps, start, duration, rate, bits):
 	fps     = float(fps)
 	duration=float(duration)
-	max_val = 2**bits - 1  # 2^8 - 1 = 0b11111111
+	fmt = 'pcm_u8'
+	
+	# if bits is 8, samples are unsigned values from 0 - 255
+	# if bits is 16, samples should be signed from -32768 to 32767
+	on_val = 255
+	off_val = 0
+	if bits == 16:
+		fmt = 'pcm_s16le'
+		on_val = 32767
+		off_val = -32768
+	elif bits == 32 or bits == 64:
+		if bits == 32:
+			fmt = 'pcm_f32le'
+		else:
+			fmt = 'pcm_f64le'
+		on_val = 1.0
+		off_val = 0.0
 
+	total_samples = int(rate * duration)
+	bytes_per_sample = bits // 8
+	total_bytes = total_samples * bytes_per_sample
+	
+	
+	# MIDI timecodes arrive in frames
 	# each frame has 80 bytes, and each byte is represented by two "notes"
 	# to represent a 0, we use FF FF or 00 00
 	# to represent a 1, we use FF 00 or 00 FF
 	# every double-note must start with the opposite of the previous half note
 
-	# generate the timecode data for the entire duration
+	# generate the MIDI timecode data for the entire duration
 	tc = Timecode(fps, start)
 	tc_encoded = []
-	print('PREPARING TIMECODE:')
+	print('PREPARING MIDI TIMECODE BYTES:')
 	print(f'| {start}\n| {fps} fps\n| {duration} secs')
 	print('Generating Timecode Stream')
 	for i in range(int(duration * fps) + 1):
@@ -81,47 +104,41 @@ def make_ltc_wave(fps, start, duration, rate, bits):
 	# duration of the data stream
 	print('Creating PCM Data Stream')
 
-	total_samples = int(rate * duration)
-	data = bytearray(total_samples)
-	for sample in range(total_samples):
-		ratio = sample/total_samples
+	# data = bytearray(total_bytes)
+	data = bytearray()
+	for sample_num in range(total_samples):
+		ratio = sample_num/total_samples
 		pct = int(ratio * 100)
-		if sample % 1000 == 0:
-			print(f'   COMPUTING:  {total_samples}:{sample}  --  {pct}%', end='\r')
-		# how far along in the bytestream are we?
-		# there are 160 double-pulses per frame
+		if sample_num % 1000 == 0:
+			print(f'   COMPUTING:  {total_samples}:{sample_num}  --  {pct}%', end='\r')
 
 		double_pulse_position = len(double_pulse_data) * ratio
 		dpp_intpart = int(double_pulse_position)
 		this_val = int(double_pulse_data[dpp_intpart])
-	
-		# # This code was used when I thought I needed to smooth
-		# # out the pulses. Turns out that smoothing isn't needed
-		# dpp_fracpart = double_pulse_position - dpp_intpart
-		# try:
-		# 	next_val = int(double_pulse_data[dpp_intpart+1])
-		# except:
-		# 	next_val = this_val
-		# #scale the value
-		# if dpp_fracpart < .5:
-		# 	dpp_fracpart *= .5
-		# else:
-		# 	dpp_fracpart += (1 - dpp_fracpart) * .5
-		# inc = (next_val - this_val) * dpp_fracpart
-		# scaled_val = int((this_val + inc) * max_val)
-		# data[sample] = scaled_val
-	
-		data[sample] = this_val * max_val
-	
+		
+		if this_val == 1:
+			sample = on_val
+		else:
+			sample = off_val
+			
+		sample_bytes = sample.to_bytes(bytes_per_sample, 'little', signed=bits > 8) # RIFF wav files use little endian
+		data.extend(sample_bytes)
+		
+	#
+	# print('DOUBLE PULSE DATA')
+	# print(double_pulse_data)
+	#
+	# print('PCM DATA')
+	# print(data)
+	#
 	
 	# everything has been computed
 	# prepare to write the wave file
 	print()
-	wave_file_name = 'ltc--{}--{}fps--{}secs.wav'.format(start.replace(':','_'), fps, duration)
+	
+	wave_file_name = 'ltc--{}--{}fps--{}--{}--{}secs.wav'.format(start.replace(':','_'), fps, rate, fmt, duration)
 	print(f'Writing WAV File: {wave_file_name}')
-	f = open(wave_file_name, 'wb')
-	write_wave_file(f, data, rate=rate, bits=bits)
-	f.close()
+	write_wave_file(wave_file_name, data, rate=rate, bits=bits)
 	print('DONE\n\n')
 
 
